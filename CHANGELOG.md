@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.8.1 (2026-04-27) — pgvector 스키마 호환성 수정
+
+### 🐛 버그 수정
+
+`002_rag.sql` 실행 시 `ERROR: 42704: type "vector" does not exist` 발생 문제 수정.
+
+#### 원인
+
+Supabase Extensions 활성화 시 vector를 `vector` 스키마에 설치(권장 옵션)하면, default search_path에 vector 스키마가 포함되지 않아 `vector(768)` 타입을 찾을 수 없음.
+
+#### 수정
+
+- `SET search_path TO public, vector, extensions` 추가
+- `ALTER DATABASE postgres SET search_path` — DB 영구 적용
+- 모든 vector 타입을 `vector.vector(768)`로 스키마 명시
+- 코사인 연산자 `<=>`를 `OPERATOR(vector.<=>)`로 명시
+- HNSW 인덱스 op class `vector.vector_cosine_ops` 명시
+- `match_rag_chunks` 함수에 `SET search_path` 직접 부여 (RPC 호출 시 안정성)
+- `GRANT USAGE ON SCHEMA vector TO service_role` 추가
+
+코드 변경 없음 — SQL 마이그레이션만 수정.
+
+---
+
 ## v0.8.0 (2026-04-27) — RAG (정책브리핑·보도자료 자동 참고)
 
 말씀자료 작성 시 관련 정책브리핑·부처 보도자료를 자동으로 검색해 컨텍스트로 주입.
