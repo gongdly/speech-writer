@@ -10,14 +10,16 @@ import { PROVIDER_LABELS } from "@/lib/llm/types";
  * API 키 설정 상태를 보여주는 배너
  *
  * 미설정 시: 빨간 배너 + 설정 페이지로 이동 버튼
- * 설정됨: 작은 회색 배너 + 현재 사용 모델 표시
+ * 설정됨: 작은 회색 배너 + 실제 사용될 모델 표시
+ *
+ * defaultProvider에 키가 없으면 effectiveProvider(자동 fallback)를 표시한다.
  */
 export function ApiKeyBanner() {
-  const { settings, loaded, hasAnyKey } = useLLMSettings();
+  const { settings, loaded, hasAnyKey, effectiveProvider } = useLLMSettings();
 
   if (!loaded) return null;
 
-  if (!hasAnyKey) {
+  if (!hasAnyKey || !effectiveProvider) {
     return (
       <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 p-4">
         <div className="flex items-start gap-3">
@@ -42,18 +44,23 @@ export function ApiKeyBanner() {
     );
   }
 
-  const currentProvider = settings.defaultProvider;
-  const currentModel = settings.models[currentProvider];
+  const currentModel = settings.models[effectiveProvider];
+  const isFallback = effectiveProvider !== settings.defaultProvider;
 
   return (
-    <div className="mb-6 rounded-md bg-muted/50 px-4 py-2.5 flex items-center justify-between">
-      <div className="flex items-center gap-2 text-sm">
+    <div className="mb-6 rounded-md bg-muted/50 px-4 py-2.5 flex items-center justify-between flex-wrap gap-2">
+      <div className="flex items-center gap-2 text-sm flex-wrap">
         <CheckCircle2 className="w-4 h-4 text-green-600" />
         <span className="text-muted-foreground">사용 모델:</span>
-        <span className="font-medium">{PROVIDER_LABELS[currentProvider]}</span>
+        <span className="font-medium">{PROVIDER_LABELS[effectiveProvider]}</span>
         {currentModel && (
           <span className="text-xs text-muted-foreground font-mono">
             ({currentModel})
+          </span>
+        )}
+        {isFallback && (
+          <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
+            기본 설정({PROVIDER_LABELS[settings.defaultProvider]}) 키 없음 → 자동 전환
           </span>
         )}
       </div>

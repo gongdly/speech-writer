@@ -149,7 +149,18 @@ export default function SettingsPage() {
 
       if (data.valid) {
         // 유효하면 저장
-        const newSettings = saveProviderKey(provider, apiKey);
+        let newSettings = saveProviderKey(provider, apiKey);
+
+        // 이전에 등록된 키가 없거나, 기본 provider에 키가 없으면
+        // 방금 등록한 provider를 기본으로 자동 설정
+        const hadOtherKeys = Object.keys(settings.keys).some(
+          (p) => p !== provider && settings.keys[p as typeof provider],
+        );
+        const defaultHasKey = Boolean(newSettings.keys[newSettings.defaultProvider]);
+        if (!hadOtherKeys || !defaultHasKey) {
+          newSettings = setDefaultProvider(provider);
+        }
+
         setSettings(newSettings);
         setKeyInputs((prev) => ({ ...prev, [provider]: "" }));
         setValidation((prev) => ({

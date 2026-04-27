@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.5.1 (2026-04-27) — 버그 수정
+
+### 🐛 사용 모델 표시 오류 수정
+
+Gemini 키만 등록해도 화면에는 "Anthropic Claude"로 잘못 표시되던 문제 수정.
+
+#### 원인
+
+`defaultProvider`가 `"anthropic"`으로 고정되어 있어서, 사용자가 다른 provider(Gemini/OpenAI) 키만 등록해도 화면 표시·실제 호출 모두 Anthropic으로 잘못 동작.
+
+#### 수정 사항
+
+- `useLLMSettings` 훅에 `effectiveProvider` 추가 — defaultProvider에 키가 없으면 등록된 첫 번째 provider로 자동 fallback
+- `ApiKeyBanner` 컴포넌트가 `effectiveProvider`를 사용해 실제 호출될 provider 정확히 표시
+- 자동 전환된 경우 시각적 안내 표시 ("기본 설정 키 없음 → 자동 전환")
+- 설정 페이지에서 첫 키 등록 시 해당 provider를 자동으로 default로 설정
+
+---
+
 ## v0.5.0 (2026-04-27) — 작성 이력 화면 (차수 5)
 
 ### ✨ 작성 이력 조회·재사용 기능
