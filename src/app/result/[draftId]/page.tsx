@@ -16,6 +16,10 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { RefinePanel } from "@/components/result/refine-panel";
+import {
+  RagSourcesPanel,
+  type RagSource,
+} from "@/components/result/rag-sources-panel";
 import { parseMarkdown, type ParsedSection } from "@/lib/utils/section-parser";
 
 interface DraftRow {
@@ -260,6 +264,19 @@ export default function ResultPage() {
               </span>
             </div>
           </div>
+
+          {/* RAG 출처 표시 (있을 때만) */}
+          {(() => {
+            try {
+              const meta = draft.draft_meta ? JSON.parse(draft.draft_meta) : null;
+              const ragSources = (meta?.ragSources ?? []) as RagSource[];
+              return ragSources.length > 0 ? (
+                <RagSourcesPanel sources={ragSources} />
+              ) : null;
+            } catch {
+              return null;
+            }
+          })()}
 
           {/* 액션 버튼 */}
           <div className="mb-4 flex flex-wrap gap-2">

@@ -1,5 +1,97 @@
 # Changelog
 
+## v0.8.0 (2026-04-27) — RAG (정책브리핑·보도자료 자동 참고)
+
+말씀자료 작성 시 관련 정책브리핑·부처 보도자료를 자동으로 검색해 컨텍스트로 주입.
+
+### 🚀 새 기능
+
+#### RAG 자동 적용
+
+말씀자료 생성 버튼 누르면 자동으로:
+
+1. 행사명 + 핵심메시지 + 발화자 소속을 검색 질의로 변환
+2. Gemini 임베딩으로 벡터화
+3. Supabase pgvector로 유사도 검색 (cosine, top-5)
+4. 검색된 자료를 5-Layer 프롬프트의 L4 컨텍스트에 자동 추가
+5. 결과 화면 상단에 "참고된 자료 N건" 패널 표시 (펼치면 원문 링크)
+
+발화자 소속이 부처명 포함 시 (예: "행정안전부 ○○과") 해당 부처 보도자료 우선 검색.
+정책브리핑은 부처 무관 항상 포함.
+
+#### 데이터 소스
+
+| 종류 | 소스 | 동기화 |
+|---|---|---|
+| 정책브리핑 | korea.kr 정책뉴스 RSS | 매일 새벽 3시 |
+| 행정안전부 | mois.go.kr 보도자료 RSS | 매일 새벽 3시 |
+| 고용노동부 | moel.go.kr 보도자료 RSS | 매일 새벽 3시 |
+| 보건복지부 | mohw.go.kr 보도자료 RSS | 매일 새벽 3시 |
+| 교육부 | moe.go.kr 보도자료 RSS | 매일 새벽 3시 |
+| 국토교통부 | molit.go.kr 보도자료 RSS | 매일 새벽 3시 |
+
+추가 부처는 Supabase `rss_sources` 테이블에 직접 INSERT로 확장 가능.
+
+#### RAG 관리 페이지 `/rag`
+
+- RSS 소스별 마지막 동기화 시각·상태·기사 수 확인
+- "지금 동기화" 수동 버튼
+- 최근 30개 동기화 로그 (성공·실패·신규 건수·청크 수)
+
+### 🔧 기술 변경
+
+**Supabase**
+- `pgvector` extension 활성화 필요 (마이그레이션에 포함)
+- 신규 테이블 4개: `rss_sources`, `rag_articles`, `rag_chunks`, `rag_sync_logs`
+- RPC 함수: `match_rag_chunks(query_embedding, match_count, similarity_threshold, filter_ministries)`
+- 벡터 인덱스: HNSW + cosine 유사도 (1만 청크 이상 시 효율 발생)
+
+**임베딩**
+- 모델: `gemini-embedding-001`
+- 차원: 768
+- 비용: 무료 티어 (분당 1천만 토큰, 결제 카드 불필요)
+- 청크 크기: 500자, 오버랩 50자, 한국어 문장 경계 우선
+
+**API 신규**
+- `POST /api/rag/sync` — RSS 동기화 (Vercel Cron + 수동)
+- `POST /api/rag/search` — 단독 검색 (디버깅·향후 인터랙티브용)
+- `GET /api/rag/status` — 소스·로그 조회
+
+**Vercel Cron**
+- `vercel.json`: `/api/rag/sync` 매일 18:00 UTC (= 한국 03:00) 자동 호출
+- 인증: `Authorization: Bearer $CRON_SECRET` (Vercel 자동)
+
+**기존 라우트 변경**
+- `/api/generate-speech`: RAG 검색 → 컨텍스트 자동 추가 + `ragSources` 응답 필드
+- 결과 페이지: `RagSourcesPanel` 컴포넌트로 출처 표시
+
+### ⚙️ 빅보스님이 배포 시 하실 일
+
+1. **Supabase SQL Editor**에서 `supabase/migrations/002_rag.sql` 실행 (pgvector 활성화 + 테이블 생성)
+2. **Vercel 환경변수** 추가:
+   - `GEMINI_API_KEY` — RAG 임베딩용 (Cron이 사용)
+   - `CRON_SECRET` — 임의 문자열 32자 (Vercel Cron 인증)
+3. GitHub push → Vercel 자동 배포
+4. 배포 완료 후 `/rag` 페이지 접속해 "지금 동기화" 클릭 (첫 풀로드 1~2분)
+5. 다음날 새벽 3시 Cron이 자동으로 새 기사만 추가 가져옴
+
+### 💰 비용
+
+- Gemini 임베딩: **무료** (분당 1천만 토큰, 일 한도 없음)
+- Supabase pgvector: **무료** (free tier 500MB DB 안에서 6개 부처 1년치 충분)
+- Vercel Cron: **무료** (Hobby 일 1회 한도 안)
+- 추가 결제 카드 등록 **불필요**
+
+### 📝 사용 흐름
+
+1. 평소처럼 행사 정보 입력 → "본문 생성" 클릭
+2. 백그라운드: RAG 검색 (1~2초 추가) → AI 생성
+3. 결과 화면 상단에 "참고된 정책브리핑·보도자료 5건" 칩
+4. 클릭하면 펼쳐져 원문 링크·유사도 표시
+5. 본문에 인용된 통계·정책명을 원문으로 검증 가능
+
+---
+
 ## v0.7.0 (2026-04-27) — 단·문단 재생성 + 톤 조정 (차수 7)
 
 v0.6 페르소나는 미루고 v0.7 다듬기 기능 우선 구현.

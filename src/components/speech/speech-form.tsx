@@ -40,7 +40,7 @@ interface SpeechFormProps {
 
 export function SpeechForm({ sessionId, extractedInfo, reuseValues }: SpeechFormProps = {}) {
   const router = useRouter();
-  const { getAuthPayload, hasAnyKey } = useLLMSettings();
+  const { getAuthPayload, hasAnyKey, settings } = useLLMSettings();
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
@@ -184,6 +184,9 @@ export function SpeechForm({ sessionId, extractedInfo, reuseValues }: SpeechForm
           provider: auth.provider,
           model: auth.model,
           apiKey: auth.apiKey,
+          // RAG 임베딩용 Gemini 키 (등록된 경우만, 없으면 서버 키 fallback)
+          userGeminiKey: settings.keys.gemini || undefined,
+          useRag: true,
           formData: {
             eventName: data.eventName,
             eventDate: data.eventDate || undefined,

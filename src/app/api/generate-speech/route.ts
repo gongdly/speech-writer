@@ -7,14 +7,87 @@ import {
 } from "@/lib/prompts/builder";
 import { listRagContextsBySession } from "@/lib/rag-cache";
 import { createDraft } from "@/lib/db";
+import { embedText, resolveGeminiKey } from "@/lib/rag/embedding";
+import { searchSimilarChunks, type MatchedChunk } from "@/lib/rag/db";
 
 export const runtime = "nodejs";
 export const maxDuration = 60; // Vercel Hobby 한도 (60초)
 
 /**
+ * 행사 정보로 RAG 검색 질의 만들기
+ *
+ * 우선순위가 높은 정보를 조합:
+ *   - 행사명 (가장 구체적)
+ *   - 핵심 메시지 (사용자 입력)
+ *   - 발화자 소속 (부처 컨텍스트)
+ */
+function buildRagQuery(
+  formData: Omit<SpeechGenerationInput, "contexts">,
+): string {
+  const parts: string[] = [];
+  if (formData.eventName) parts.push(formData.eventName);
+  if (formData.keyMessages && formData.keyMessages.length > 0) {
+    parts.push(formData.keyMessages.join(" "));
+  }
+  if (formData.speakerOrganization) {
+    parts.push(formData.speakerOrganization);
+  }
+  return parts.join(" ").slice(0, 500);
+}
+
+/**
+ * 발화자 소속에서 부처명 추정
+ *
+ * "행정안전부 정보화담당관" → "행정안전부"
+ * 추정 실패하면 null (필터 미적용 → 정책브리핑만 검색)
+ */
+function inferMinistry(speakerOrg?: string): string | null {
+  if (!speakerOrg) return null;
+  const ministries = [
+    "행정안전부",
+    "고용노동부",
+    "보건복지부",
+    "교육부",
+    "국토교통부",
+    "기획재정부",
+    "외교부",
+    "국방부",
+    "과학기술정보통신부",
+    "농림축산식품부",
+    "산업통상자원부",
+    "환경부",
+    "여성가족부",
+    "문화체육관광부",
+    "해양수산부",
+    "통일부",
+    "법무부",
+  ];
+  return ministries.find((m) => speakerOrg.includes(m)) ?? null;
+}
+
+/**
+ * RAG 검색 결과를 컨텍스트 텍스트로 포맷
+ */
+function formatRagContext(matches: MatchedChunk[]): string {
+  if (matches.length === 0) return "";
+
+  const sections = matches.map((m, idx) => {
+    const date = m.article_pub_date
+      ? new Date(m.article_pub_date).toISOString().slice(0, 10)
+      : "날짜 미상";
+    return `[참고자료 ${idx + 1}] ${m.source_name} (${date})
+제목: ${m.article_title}
+내용: ${m.content}`;
+  });
+
+  return sections.join("\n\n---\n\n");
+}
+
+/**
  * POST /api/generate-speech
  *
  * 5-Layer 프롬프트로 AI 본문 생성 후 Supabase drafts 테이블에 저장.
+ * v0.8부터 RAG 자동 적용.
  *
  * Body:
  *   {
@@ -22,17 +95,19 @@ export const maxDuration = 60; // Vercel Hobby 한도 (60초)
  *     provider: "anthropic" | "gemini" | "openai",
  *     model: string,
  *     apiKey: string,
- *     formData: SpeechGenerationInput  // 폼 입력값
+ *     formData: SpeechGenerationInput,
+ *     useRag?: boolean,                  // 기본 true
+ *     ragMatchCount?: number,            // 기본 5
+ *     userGeminiKey?: string,            // RAG 임베딩용 (없으면 서버 키 fallback)
  *   }
  *
  * Response:
  *   {
- *     draftId: string,
- *     content: string,        // 생성된 마크다운 본문
- *     charCount: number,
- *     metadata: {
- *       provider, model, inputTokens, outputTokens, generationTimeMs
- *     }
+ *     draftId, content, charCount,
+ *     metadata: { provider, model, inputTokens, outputTokens, generationTimeMs },
+ *     ragSources?: Array<{                // 사용된 출처 (UI에 표시)
+ *       title, link, sourceName, ministry, pubDate, similarity
+ *     }>
  *   }
  */
 export async function POST(req: NextRequest) {
@@ -45,9 +120,21 @@ export async function POST(req: NextRequest) {
       model: string;
       apiKey: string;
       formData: Omit<SpeechGenerationInput, "contexts">;
+      useRag?: boolean;
+      ragMatchCount?: number;
+      userGeminiKey?: string;
     };
 
-    const { sessionId, provider, model, apiKey, formData } = body;
+    const {
+      sessionId,
+      provider,
+      model,
+      apiKey,
+      formData,
+      useRag = true,
+      ragMatchCount = 5,
+      userGeminiKey,
+    } = body;
 
     // 입력 검증
     if (!sessionId) {
@@ -72,11 +159,52 @@ export async function POST(req: NextRequest) {
     // 업로드된 컨텍스트 가져오기 (있으면 자동 활용)
     const contexts = await listRagContextsBySession(sessionId);
 
+    // RAG 자동 검색 (정책브리핑 + 부처 보도자료)
+    let ragMatches: MatchedChunk[] = [];
+    if (useRag) {
+      try {
+        const geminiKey = resolveGeminiKey(userGeminiKey);
+        const ragQuery = buildRagQuery(formData);
+        if (ragQuery.trim().length > 0) {
+          const queryEmbedding = await embedText(ragQuery, {
+            apiKey: geminiKey,
+            taskType: "RETRIEVAL_QUERY",
+          });
+
+          const ministry = inferMinistry(formData.speakerOrganization);
+          ragMatches = await searchSimilarChunks({
+            queryEmbedding,
+            matchCount: ragMatchCount,
+            similarityThreshold: 0.5,
+            filterMinistries: ministry ? [ministry] : undefined,
+          });
+        }
+      } catch (ragError) {
+        // RAG 실패해도 본문 생성은 진행 (RAG는 선택적 보강)
+        console.warn("RAG search failed (non-fatal):", ragError);
+      }
+    }
+
+    // RAG 결과를 컨텍스트로 추가
+    const ragContextText = formatRagContext(ragMatches);
+    const enrichedContexts = ragContextText
+      ? [
+          ...contexts,
+          {
+            fileId: "_rag_auto",
+            fileName: `정책브리핑·보도자료 자동 참고 (${ragMatches.length}건)`,
+            fileType: "reference" as const,
+            category: "rag_auto",
+            text: ragContextText,
+          },
+        ]
+      : contexts;
+
     // 5-Layer 프롬프트 조립
     const { systemPrompt, userPrompt, estimatedInputTokens } =
       buildSpeechPrompt({
         ...formData,
-        contexts,
+        contexts: enrichedContexts,
       });
 
     // 컨텍스트가 너무 크면 경고
@@ -119,6 +247,15 @@ export async function POST(req: NextRequest) {
     const charCount = response.text.replace(/\s/g, "").length;
 
     // Supabase drafts에 저장
+    const ragSources = ragMatches.map((m) => ({
+      title: m.article_title,
+      link: m.article_link,
+      sourceName: m.source_name,
+      ministry: m.article_ministry,
+      pubDate: m.article_pub_date,
+      similarity: Math.round(m.similarity * 1000) / 1000,
+    }));
+
     const draft = await createDraft({
       session_id: sessionId,
       event_name: formData.eventName,
@@ -147,6 +284,8 @@ export async function POST(req: NextRequest) {
         outputTokens: response.usage?.outputTokens,
         generationTimeMs,
         charCount,
+        ragUsed: ragSources.length > 0,
+        ragSources,
       }),
       status: "draft",
     });
@@ -162,6 +301,7 @@ export async function POST(req: NextRequest) {
         outputTokens: response.usage?.outputTokens,
         generationTimeMs,
       },
+      ragSources,
     });
   } catch (e) {
     console.error("Generate speech failed:", e);
