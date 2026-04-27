@@ -133,6 +133,25 @@ export async function getDraft(id: string): Promise<DraftRow | null> {
   return (data as DraftRow | null) ?? null;
 }
 
+/**
+ * 초안 본문 업데이트 (수정·재생성·톤조정 등)
+ */
+export async function updateDraft(
+  id: string,
+  draftMd: string,
+): Promise<void> {
+  const sb = createServerClient();
+  const { error } = await sb
+    .from("drafts")
+    .update({
+      draft_md: draftMd,
+      updated_at: Date.now(),
+    })
+    .eq("id", id);
+
+  if (error) throw new Error(`updateDraft failed: ${error.message}`);
+}
+
 export async function listDraftsBySession(
   sessionId: string,
   limit = 20,

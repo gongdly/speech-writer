@@ -45,7 +45,6 @@ export function ApiKeyBanner() {
   }
 
   const currentModel = settings.models[effectiveProvider];
-  const isFallback = effectiveProvider !== settings.defaultProvider;
 
   return (
     <div className="mb-6 rounded-md bg-muted/50 px-4 py-2.5 flex items-center justify-between flex-wrap gap-2">
@@ -56,11 +55,6 @@ export function ApiKeyBanner() {
         {currentModel && (
           <span className="text-xs text-muted-foreground font-mono">
             ({currentModel})
-          </span>
-        )}
-        {isFallback && (
-          <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
-            기본 설정({PROVIDER_LABELS[settings.defaultProvider]}) 키 없음 → 자동 전환
           </span>
         )}
       </div>
