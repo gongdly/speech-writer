@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Sparkles, Info, ChevronDown, ChevronUp, Plus, X } from "lucide-react";
+import { Sparkles, Info, ChevronDown, ChevronUp, Plus, X, AlertCircle } from "lucide-react";
+import { useLLMSettings } from "@/lib/hooks/use-llm-settings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,8 +38,11 @@ interface SpeechFormProps {
 }
 
 export function SpeechForm({ sessionId, extractedInfo }: SpeechFormProps = {}) {
+  const router = useRouter();
+  const { getAuthPayload, hasAnyKey } = useLLMSettings();
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
 
   const {
     control,
@@ -91,14 +96,89 @@ export function SpeechForm({ sessionId, extractedInfo }: SpeechFormProps = {}) {
 
   const onSubmit = async (data: SpeechFormValues) => {
     setSubmitting(true);
+    setGenerationError(null);
+
     try {
-      // TODO: 차수 3에서 /api/compose 호출 + 스트리밍 결과 페이지로 이동
-      console.log("Submit:", { sessionId, ...data });
-      alert(
-        `입력값 검증 완료${sessionId ? ` (세션: ${sessionId.slice(0, 10)}...)` : ""}\n` +
-          `AI 생성 API는 차수 3에서 구현됩니다.\n\n` +
-          `목표 분량: ${data.lengthOption === "custom" ? data.customChars : "프리셋"}자`,
-      );
+      // 세션 확인
+      if (!sessionId) {
+        setGenerationError("세션이 발급되지 않았습니다. 페이지를 새로고침해 주세요.");
+        return;
+      }
+
+      // API 키 확인
+      const auth = getAuthPayload();
+      if (!auth) {
+        setGenerationError(
+          "API 키가 설정되지 않았습니다. 우측 상단의 [API 키 설정]에서 키를 등록해 주세요.",
+        );
+        return;
+      }
+
+      // 분량 → targetChars 변환 (1분당 280자 기준)
+      const targetChars =
+        data.lengthOption === "custom"
+          ? (data.customChars ?? 1400)
+          : (() => {
+              const opt = LENGTH_OPTIONS.find((o) => o.key === data.lengthOption);
+              return opt?.targetChars ?? 1400;
+            })();
+
+      // 분량 라벨
+      const lengthLabel =
+        data.lengthOption === "custom"
+          ? `${targetChars}자 (직접 입력)`
+          : (LENGTH_OPTIONS.find((o) => o.key === data.lengthOption)?.label ??
+            data.lengthOption);
+
+      // 행사 유형 라벨
+      const eventTypeLabel = EVENT_TYPES.find((e) => e.key === data.eventType)?.label;
+
+      // 발화자 직급 라벨
+      const speakerRoleLabel = SPEAKER_PERSONAS.find(
+        (p) => p.key === data.speakerRole,
+      )?.label;
+
+      // generate-speech API 호출
+      const res = await fetch("/api/generate-speech", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          provider: auth.provider,
+          model: auth.model,
+          apiKey: auth.apiKey,
+          formData: {
+            eventName: data.eventName,
+            eventDate: data.eventDate || undefined,
+            eventLocation: data.eventLocation || undefined,
+            eventType: data.eventType,
+            eventTypeLabel,
+            speakerRole: data.speakerRole,
+            speakerRoleLabel,
+            speakerRoleCustom: data.speakerRoleCustom || undefined,
+            speakerOrganization: data.speakerOrganization || undefined,
+            audience: data.audience,
+            lengthOption: lengthLabel,
+            targetChars,
+            keyMessages: (data.keyMessages || []).filter(Boolean),
+            citedStats: data.citedStats || undefined,
+            avoidExpressions: (data.avoidExpressions || []).filter(Boolean),
+            attendees: (data.attendees || []).filter((a) => a.name && a.role),
+          },
+        }),
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        setGenerationError(result.error ?? `생성 실패 (HTTP ${res.status})`);
+        return;
+      }
+
+      // 결과 페이지로 이동
+      router.push(`/result/${result.draftId}`);
+    } catch (e) {
+      setGenerationError(e instanceof Error ? e.message : "예기치 않은 오류");
     } finally {
       setSubmitting(false);
     }
@@ -424,10 +504,35 @@ export function SpeechForm({ sessionId, extractedInfo }: SpeechFormProps = {}) {
       </Card>
 
       {/* 제출 */}
-      <div className="sticky bottom-4 bg-background/80 backdrop-blur-sm border rounded-lg p-4 shadow-lg">
-        <Button type="submit" size="lg" className="w-full" disabled={!isValid || submitting}>
+      <div className="sticky bottom-4 bg-background/80 backdrop-blur-sm border rounded-lg p-4 shadow-lg space-y-3">
+        {!hasAnyKey && (
+          <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+            <div>
+              API 키가 설정되지 않았습니다. 우측 상단의{" "}
+              <a href="/settings" className="underline font-medium">
+                [API 키 설정]
+              </a>
+              에서 키를 등록해 주세요.
+            </div>
+          </div>
+        )}
+
+        {generationError && (
+          <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+            <div>{generationError}</div>
+          </div>
+        )}
+
+        <Button
+          type="submit"
+          size="lg"
+          className="w-full"
+          disabled={!isValid || submitting || !hasAnyKey}
+        >
           <Sparkles className="mr-2 w-5 h-5" />
-          {submitting ? "생성 중..." : "AI 초안 생성 (예상 45초)"}
+          {submitting ? "생성 중... (최대 60초 소요)" : "AI 초안 생성"}
         </Button>
       </div>
     </form>

@@ -1,0 +1,256 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  ArrowLeft,
+  Copy,
+  Edit2,
+  Save,
+  X,
+  RefreshCw,
+  Check,
+  AlertCircle,
+} from "lucide-react";
+
+interface DraftRow {
+  id: string;
+  event_name: string;
+  event_type: string;
+  speaker_role: string;
+  length_option: string;
+  target_chars: number;
+  draft_md: string | null;
+  draft_meta: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export default function ResultPage() {
+  const params = useParams<{ draftId: string }>();
+  const router = useRouter();
+
+  const [draft, setDraft] = useState<DraftRow | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // 편집 모드
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedContent, setEditedContent] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // 복사 토스트
+  const [copied, setCopied] = useState(false);
+
+  // 초안 로드
+  useEffect(() => {
+    if (!params.draftId) return;
+
+    (async () => {
+      try {
+        const res = await fetch(`/api/drafts/${params.draftId}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "조회 실패");
+        setDraft(data.draft);
+        setEditedContent(data.draft?.draft_md ?? "");
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "조회 실패");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [params.draftId]);
+
+  const currentContent = isEditing ? editedContent : (draft?.draft_md ?? "");
+  const charCount = currentContent.replace(/\s/g, "").length;
+  const targetChars = draft?.target_chars ?? 0;
+  const charPercent =
+    targetChars > 0 ? Math.round((charCount / targetChars) * 100) : 0;
+
+  // 복사
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(currentContent);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (e) {
+      alert("복사 실패. 텍스트를 직접 선택해 주세요.");
+    }
+  };
+
+  // 편집 시작
+  const handleStartEdit = () => {
+    setEditedContent(draft?.draft_md ?? "");
+    setIsEditing(true);
+  };
+
+  // 편집 취소
+  const handleCancelEdit = () => {
+    if (
+      editedContent !== (draft?.draft_md ?? "") &&
+      !confirm("변경 사항이 있습니다. 정말 취소하시겠습니까?")
+    ) {
+      return;
+    }
+    setEditedContent(draft?.draft_md ?? "");
+    setIsEditing(false);
+  };
+
+  // 편집 저장
+  const handleSaveEdit = async () => {
+    if (!draft) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/drafts/${draft.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: editedContent }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "저장 실패");
+
+      setDraft({ ...draft, draft_md: editedContent });
+      setIsEditing(false);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "저장 실패");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // 다시 생성 (작성 페이지로 이동)
+  const handleRegenerate = () => {
+    if (!confirm("새로 작성하시겠습니까? 입력 폼으로 돌아갑니다.")) return;
+    router.push("/speech");
+  };
+
+  if (loading) {
+    return (
+      <div className="container mx-auto max-w-4xl p-6">
+        <div className="text-center text-muted-foreground">
+          초안을 불러오는 중...
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !draft) {
+    return (
+      <div className="container mx-auto max-w-4xl p-6">
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-destructive">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5" />
+            <span>{error ?? "초안을 찾을 수 없습니다"}</span>
+          </div>
+        </div>
+        <Link href="/speech" className="mt-4 inline-block">
+          <Button variant="outline" size="sm">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            작성 페이지로
+          </Button>
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto max-w-4xl p-6">
+      {/* 헤더 */}
+      <div className="mb-6 flex items-center justify-between">
+        <Link href="/speech">
+          <Button variant="ghost" size="sm">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            작성 페이지로
+          </Button>
+        </Link>
+        <h1 className="text-xl font-bold">{draft.event_name}</h1>
+      </div>
+
+      {/* 메타 정보 */}
+      <div className="mb-4 flex flex-wrap gap-4 rounded-lg border border-border/50 bg-muted/30 p-4 text-sm">
+        <div>
+          <span className="text-muted-foreground">분량 목표</span>{" "}
+          <span className="font-medium">{draft.length_option}</span>
+        </div>
+        <div>
+          <span className="text-muted-foreground">현재 글자수</span>{" "}
+          <span
+            className={`font-medium ${
+              charPercent >= 95 && charPercent <= 105
+                ? "text-emerald-600"
+                : charPercent < 95
+                  ? "text-amber-600"
+                  : "text-red-600"
+            }`}
+          >
+            {charCount.toLocaleString()}자 / 목표 {targetChars.toLocaleString()}자 ({charPercent}%)
+          </span>
+        </div>
+      </div>
+
+      {/* 액션 버튼 */}
+      <div className="mb-4 flex flex-wrap gap-2">
+        {!isEditing ? (
+          <>
+            <Button onClick={handleStartEdit} size="sm" variant="outline">
+              <Edit2 className="mr-2 h-4 w-4" />
+              편집
+            </Button>
+            <Button onClick={handleCopy} size="sm" variant="outline">
+              {copied ? (
+                <>
+                  <Check className="mr-2 h-4 w-4" />
+                  복사됨!
+                </>
+              ) : (
+                <>
+                  <Copy className="mr-2 h-4 w-4" />
+                  마크다운 복사
+                </>
+              )}
+            </Button>
+            <Button onClick={handleRegenerate} size="sm" variant="outline">
+              <RefreshCw className="mr-2 h-4 w-4" />
+              다시 작성
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button onClick={handleSaveEdit} size="sm" disabled={saving}>
+              <Save className="mr-2 h-4 w-4" />
+              {saving ? "저장 중..." : "저장"}
+            </Button>
+            <Button onClick={handleCancelEdit} size="sm" variant="outline">
+              <X className="mr-2 h-4 w-4" />
+              취소
+            </Button>
+          </>
+        )}
+      </div>
+
+      {/* 본문 (보기 / 편집) */}
+      {isEditing ? (
+        <Textarea
+          value={editedContent}
+          onChange={(e) => setEditedContent(e.target.value)}
+          className="min-h-[600px] font-mono text-sm"
+          placeholder="본문을 편집하세요..."
+        />
+      ) : (
+        <div className="rounded-lg border border-border/50 bg-card p-6">
+          <pre className="whitespace-pre-wrap font-sans text-base leading-relaxed">
+            {currentContent}
+          </pre>
+        </div>
+      )}
+
+      {/* 안내 */}
+      <p className="mt-4 text-xs text-muted-foreground">
+        💡 편집 후 저장하면 변경 사항이 보존됩니다. 마크다운 복사 버튼으로 워드·메모장에 붙여넣을 수 있습니다.
+      </p>
+    </div>
+  );
+}

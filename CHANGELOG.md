@@ -1,5 +1,57 @@
 # Changelog
 
+## v0.4.0 (2026-04-27) — AI 본문 생성 (차수 3)
+
+### ✨ 핵심 기능: AI가 실제 말씀자료 본문을 생성
+
+5-Layer 프롬프트 아키텍처로 6단 정형 구조에 맞는 말씀자료 초안을 자동 생성.
+
+#### 새 기능
+
+- **AI 본문 생성**: 폼 제출 → 5-Layer 프롬프트 조립 → AI 호출 → 마크다운 본문 출력
+- **결과 화면**: 생성된 본문을 보고 편집·복사 가능 (`/result/[draftId]`)
+- **단순 텍스트 편집**: 결과 화면에서 직접 수정·저장
+- **마크다운 복사**: 한 번 클릭으로 클립보드 복사
+- **다시 작성**: 작성 페이지로 돌아가기
+- **자동 저장**: 생성된 모든 초안이 Supabase `drafts` 테이블에 저장
+
+#### 5-Layer 프롬프트 아키텍처
+
+| Layer | 내용 | 파일 |
+|---|---|---|
+| L1 | 시스템 정체성 (역할·금지사항·원칙) | `lib/prompts/l1-identity.ts` |
+| L2 | 도메인 지식 (6단 구조·8행사·정형구·페르소나) | `lib/prompts/l2-domain.ts` |
+| L3 | 작성 규칙 (절차·출력 형식) | `lib/prompts/l3-rules.ts` |
+| L4 | 컨텍스트 주입 (업로드 자료 자동 포함) | `lib/prompts/builder.ts` |
+| L5 | 사용자 입력 (행사 정보 정리) | `lib/prompts/builder.ts` |
+
+#### 새 파일
+
+- `src/lib/prompts/l1-identity.ts`
+- `src/lib/prompts/l2-domain.ts`
+- `src/lib/prompts/l3-rules.ts`
+- `src/lib/prompts/builder.ts` (5-Layer 조립기)
+- `src/app/api/generate-speech/route.ts` (생성 API)
+- `src/app/api/drafts/[id]/route.ts` (조회·편집 API)
+- `src/app/result/[draftId]/page.tsx` (결과 화면)
+
+#### 수정
+
+- `src/components/speech/speech-form.tsx`: 임시 alert → 실제 API 호출 + 결과 페이지 이동
+
+#### 의도적 제외
+
+- **가드레일 (G-1~G-10)**: 빅보스님 결정에 따라 차수 3에서는 제외. 사용자(공무원) 본인이 검수 가능하고, 모던 LLM이 대부분의 규칙을 자동 준수하므로 불필요. 향후 부처 정식 도입 시 재검토.
+
+#### 비용 안내
+
+생성 1회당 사용자 본인 API 키에서 차감:
+- Claude Sonnet 4.6: 약 $0.01~0.05
+- Gemini 2.5 Pro: 약 $0.005~0.02
+- GPT-5: 약 $0.01~0.04
+
+---
+
 ## v0.3.0 (2026-04-27) — 인프라 전환
 
 ### 🔄 BREAKING: Cloudflare → Vercel + Supabase
