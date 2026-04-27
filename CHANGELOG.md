@@ -1,5 +1,62 @@
 # Changelog
 
+## v0.8.3 (2026-04-27) — HWPX·Markdown 업로드 지원
+
+### ✨ 새 기능
+
+행사계획서·참고자료 업로드에 두 가지 형식 추가.
+
+#### Markdown (.md)
+
+- 텍스트와 동일하게 처리, 마크다운 문법 그대로 LLM에 전달
+- 확장자: `.md`, `.markdown`, `.mdown`, `.mkd`
+- MIME: `text/markdown`, `text/x-markdown`
+
+#### HWPX (.hwpx)
+
+- 한글 워드프로세서 OpenXML 포맷 (한글 2014 이후)
+- ZIP 아카이브 → `Contents/section*.xml` 파싱
+- 정규식 기반 `<hp:t>` 텍스트 런 추출
+- 추출 실패 시 `Preview/PrvText.txt` fallback (미리보기 텍스트)
+- 구형 HWP(바이너리 OLE)는 미지원 — 한글에서 HWPX로 다시 저장 권장
+
+### 🔧 기술 변경
+
+- 신규 의존성: `jszip@^3.10.1`
+- `lib/extractors/file-types.ts`: `md`, `hwpx` 타입 정식 추가
+- `lib/extractors/index.ts`: `extractMarkdown`, `extractHwpx`, `parseHwpxSection` 함수
+- `decodeTextSafe`: UTF-8 우선, 깨지면 EUC-KR fallback (한국 정부 텍스트 호환)
+- 업로드 zone `accept` 속성: `.md`, `.hwpx` 허용
+- 안내 문구·에러 메시지 업데이트: "DOCX, PDF, TXT, MD, HWPX"
+
+### 📝 사용
+
+업로드 화면에 그대로 .md, .hwpx 파일 드래그·드롭. 텍스트 추출 후 RAG 컨텍스트에 자동 포함.
+
+---
+
+## v0.8.2 (2026-04-27) — 수동 동기화 인증 UI
+
+### 🐛 버그 수정
+
+`CRON_SECRET` 환경변수 등록 후 "지금 동기화" 버튼이 인증 실패로 막히던 문제 수정.
+
+#### 원인
+
+서버 코드는 `CRON_SECRET`이 등록되면 모든 호출에 `Authorization: Bearer <secret>` 헤더를 요구. 그런데 `/rag` 페이지의 수동 동기화 버튼은 헤더를 전송하지 않음.
+
+#### 수정
+
+- `/rag` 페이지에 "수동 동기화 시크릿" 입력 카드 추가
+- 한 번 입력하면 브라우저 localStorage에 저장 (서버 미전송)
+- 동기화 버튼 클릭 시 `Authorization: Bearer <secret>` 헤더 자동 첨부
+- 보이기/숨기기 토글, 저장됨 배지, 지우기 버튼 제공
+- 시크릿 미입력 시 동기화 버튼 비활성화
+
+빅보스님 작업: `/rag` 페이지에서 Vercel `CRON_SECRET` 값을 한 번만 입력하면 됨. 다음부터 자동 인증.
+
+---
+
 ## v0.8.1 (2026-04-27) — pgvector 스키마 호환성 수정
 
 ### 🐛 버그 수정

@@ -48,13 +48,16 @@ export async function POST(req: NextRequest) {
     const detected = detectFileType(file.name, file.type);
     if (!detected) {
       return NextResponse.json(
-        { error: "지원하지 않는 파일 형식입니다 (DOCX·PDF·TXT 지원)" },
+        {
+          error:
+            "지원하지 않는 파일 형식입니다 (DOCX·PDF·TXT·MD·HWPX 지원)",
+        },
         { status: 400 },
       );
     }
     if (!isTextExtractable(detected)) {
       return NextResponse.json(
-        { error: "현재 DOCX·PDF·TXT만 지원합니다." },
+        { error: "현재 DOCX·PDF·TXT·MD·HWPX만 지원합니다." },
         { status: 400 },
       );
     }

@@ -1,6 +1,6 @@
 {
   "name": "speech-writer",
-  "version": "0.8.1",
+  "version": "0.8.3",
   "private": true,
   "description": "AI-powered speech writer for government and public sector — Vercel + Supabase",
   "scripts": {
@@ -30,6 +30,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "jszip": "^3.10.1",
     "lucide-react": "^0.488.0",
     "mammoth": "^1.9.1",
     "nanoid": "^5.1.5",

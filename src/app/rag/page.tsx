@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   ArrowLeft,
   RefreshCw,
@@ -10,6 +12,9 @@ import {
   CheckCircle2,
   AlertCircle,
   Clock,
+  KeyRound,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 interface RssSourceRow {
@@ -36,6 +41,8 @@ interface SyncLogRow {
   rss_sources?: { name: string; category: string };
 }
 
+const SECRET_STORAGE_KEY = "rag_sync_secret";
+
 export default function RagAdminPage() {
   const [sources, setSources] = useState<RssSourceRow[]>([]);
   const [logs, setLogs] = useState<SyncLogRow[]>([]);
@@ -43,6 +50,32 @@ export default function RagAdminPage() {
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+
+  // 시크릿 (Vercel CRON_SECRET과 동일한 값)
+  const [secret, setSecret] = useState("");
+  const [showSecret, setShowSecret] = useState(false);
+  const [secretLoaded, setSecretLoaded] = useState(false);
+
+  // localStorage에서 시크릿 로드
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = window.localStorage.getItem(SECRET_STORAGE_KEY);
+      if (stored) setSecret(stored);
+      setSecretLoaded(true);
+    }
+  }, []);
+
+  // 시크릿 저장
+  const handleSaveSecret = (value: string) => {
+    setSecret(value);
+    if (typeof window !== "undefined") {
+      if (value.trim()) {
+        window.localStorage.setItem(SECRET_STORAGE_KEY, value.trim());
+      } else {
+        window.localStorage.removeItem(SECRET_STORAGE_KEY);
+      }
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -65,7 +98,16 @@ export default function RagAdminPage() {
   }, []);
 
   const handleSync = async () => {
-    if (!confirm("지금 모든 RSS 소스를 동기화하시겠습니까? (1~2분 소요)")) return;
+    if (!secret.trim()) {
+      setSyncError(
+        "동기화 시크릿이 필요합니다. Vercel에 등록한 CRON_SECRET 값을 입력해 주세요.",
+      );
+      return;
+    }
+
+    if (!confirm("지금 모든 RSS 소스를 동기화하시겠습니까? (1~2분 소요)"))
+      return;
+
     setSyncing(true);
     setSyncResult(null);
     setSyncError(null);
@@ -73,13 +115,23 @@ export default function RagAdminPage() {
     try {
       const res = await fetch("/api/rag/sync", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          // Vercel Cron과 동일한 형식으로 전달
+          Authorization: `Bearer ${secret.trim()}`,
+        },
         body: JSON.stringify({}),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        setSyncError(data.error ?? "동기화 실패");
+        if (res.status === 401) {
+          setSyncError(
+            "인증 실패: Vercel에 등록한 CRON_SECRET 값과 정확히 일치하는지 확인해 주세요.",
+          );
+        } else {
+          setSyncError(data.error ?? "동기화 실패");
+        }
       } else {
         const summary = data.summary;
         setSyncResult(
@@ -97,6 +149,8 @@ export default function RagAdminPage() {
     }
   };
 
+  const hasSecret = secret.trim().length > 0;
+
   return (
     <div className="container mx-auto max-w-5xl p-4 md:p-6">
       <div className="mb-6 flex items-center justify-between">
@@ -113,18 +167,76 @@ export default function RagAdminPage() {
         <div className="flex items-start gap-2">
           <Database className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
           <div>
-            <p className="font-medium mb-1">RAG (Retrieval-Augmented Generation)</p>
+            <p className="font-medium mb-1">
+              RAG (Retrieval-Augmented Generation)
+            </p>
             <p className="text-muted-foreground">
-              정책브리핑·부처별 보도자료 최근 1년치를 임베딩하여, 말씀자료 작성 시
-              관련 자료를 자동으로 참고합니다. 매일 새벽 3시 자동 동기화됩니다.
+              정책브리핑·부처별 보도자료 최근 1년치를 임베딩하여, 말씀자료
+              작성 시 관련 자료를 자동으로 참고합니다. 매일 새벽 3시 자동
+              동기화됩니다.
             </p>
           </div>
         </div>
       </div>
 
+      {/* 시크릿 입력 카드 */}
+      <div className="rounded-lg border border-border/50 bg-card p-4 mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <KeyRound className="w-4 h-4 text-amber-600" />
+          <h2 className="font-semibold text-sm">수동 동기화 시크릿</h2>
+          {secretLoaded && hasSecret && (
+            <span className="text-xs px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400">
+              저장됨
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground mb-3">
+          Vercel 환경변수 <code className="bg-muted px-1 rounded">CRON_SECRET</code>에
+          등록한 값을 그대로 입력해 주세요. 한 번만 입력하면 이 브라우저에
+          저장되어 다음부터는 자동 인증됩니다. (브라우저 localStorage에만 저장,
+          서버로 전송되지 않음)
+        </p>
+        <div className="flex gap-2">
+          <div className="flex-1 relative">
+            <Input
+              type={showSecret ? "text" : "password"}
+              placeholder="CRON_SECRET 값 (예: aB3xK9pQ2mN7vR4tY6wZ...)"
+              value={secret}
+              onChange={(e) => handleSaveSecret(e.target.value)}
+              className="pr-10"
+            />
+            <button
+              type="button"
+              onClick={() => setShowSecret((v) => !v)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              aria-label={showSecret ? "숨기기" : "보이기"}
+            >
+              {showSecret ? (
+                <EyeOff className="w-4 h-4" />
+              ) : (
+                <Eye className="w-4 h-4" />
+              )}
+            </button>
+          </div>
+          {hasSecret && (
+            <Button
+              onClick={() => handleSaveSecret("")}
+              variant="outline"
+              size="sm"
+            >
+              지우기
+            </Button>
+          )}
+        </div>
+      </div>
+
       {/* 수동 동기화 */}
       <div className="mb-6 flex items-center gap-3">
-        <Button onClick={handleSync} disabled={syncing}>
+        <Button
+          onClick={handleSync}
+          disabled={syncing || !hasSecret}
+          title={!hasSecret ? "먼저 시크릿을 입력해 주세요" : ""}
+        >
           {syncing ? (
             <>
               <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
@@ -137,7 +249,12 @@ export default function RagAdminPage() {
             </>
           )}
         </Button>
-        <Button onClick={loadData} variant="outline" size="sm" disabled={loading}>
+        <Button
+          onClick={loadData}
+          variant="outline"
+          size="sm"
+          disabled={loading}
+        >
           새로고침
         </Button>
       </div>
@@ -169,7 +286,9 @@ export default function RagAdminPage() {
               <div className="flex-1 min-w-0">
                 <div className="font-medium">{src.name}</div>
                 <div className="text-xs text-muted-foreground">
-                  {src.category === "policy_briefing" ? "정책브리핑" : src.ministry}
+                  {src.category === "policy_briefing"
+                    ? "정책브리핑"
+                    : src.ministry}
                   {" · "}
                   기사 {src.total_articles.toLocaleString()}건
                   {src.last_synced_at && (

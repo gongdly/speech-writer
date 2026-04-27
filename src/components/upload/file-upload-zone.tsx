@@ -30,9 +30,16 @@ interface FileUploadZoneProps {
 }
 
 const ACCEPT = {
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [
+    ".docx",
+  ],
   "application/pdf": [".pdf"],
   "text/plain": [".txt"],
+  "text/markdown": [".md", ".markdown"],
+  // HWPX MIME은 브라우저에 따라 인식 못할 수 있어 빈 문자열 키도 추가
+  "application/haansofthwpx": [".hwpx"],
+  "application/x-hwpx": [".hwpx"],
+  "application/octet-stream": [".hwpx", ".md"], // 안전장치
 };
 
 export function FileUploadZone({
@@ -156,7 +163,7 @@ export function FileUploadZone({
               {isDragActive ? "여기에 놓으세요" : "파일을 끌어다 놓거나 클릭"}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              지원: DOCX, PDF, TXT · 최대 {MAX_FILE_SIZE / 1024 / 1024}MB
+              지원: DOCX, PDF, TXT, MD, HWPX · 최대 {MAX_FILE_SIZE / 1024 / 1024}MB
               {multiple && ` · 최대 ${MAX_REFERENCE_FILES}개`}
             </p>
           </>
