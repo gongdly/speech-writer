@@ -166,7 +166,12 @@ export default function ResultPage() {
             작성 페이지로
           </Button>
         </Link>
-        <h1 className="text-xl font-bold">{draft.event_name}</h1>
+        <h1 className="text-xl font-bold flex-1 text-center truncate px-2">{draft.event_name}</h1>
+        <Link href="/history">
+          <Button variant="ghost" size="sm">
+            작성 이력
+          </Button>
+        </Link>
       </div>
 
       {/* 메타 정보 */}

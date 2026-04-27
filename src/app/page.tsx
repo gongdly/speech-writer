@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FileText, Newspaper, ArrowRight, Sparkles, KeyRound } from "lucide-react";
+import { FileText, Newspaper, ArrowRight, Sparkles, KeyRound, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -115,11 +115,11 @@ export default function HomePage() {
               API 키 설정
             </Link>
           </Button>
-          <Button variant="ghost" asChild>
-            <Link href="/history">작성 이력</Link>
-          </Button>
-          <Button variant="ghost" asChild>
-            <Link href="/personas">페르소나 설정</Link>
+          <Button variant="outline" asChild>
+            <Link href="/history">
+              <History className="w-4 h-4 mr-2" />
+              작성 이력
+            </Link>
           </Button>
         </div>
       </section>
@@ -127,7 +127,7 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="border-t py-6 text-center text-sm text-muted-foreground">
         <div className="container max-w-5xl">
-          <p>Speech Writer · AI 기반 공공 콘텐츠 작성 도구 · MVP v0.1</p>
+          <p>Speech Writer · AI 기반 공공 콘텐츠 작성 도구 · v0.5</p>
         </div>
       </footer>
     </main>

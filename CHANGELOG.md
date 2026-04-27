@@ -1,5 +1,35 @@
 # Changelog
 
+## v0.5.0 (2026-04-27) — 작성 이력 화면 (차수 5)
+
+### ✨ 작성 이력 조회·재사용 기능
+
+과거에 작성한 모든 초안을 한 화면에서 검색·재사용·삭제할 수 있는 이력 화면.
+
+#### 새 기능
+
+- **이력 화면** (`/history`): 최근 순으로 모든 초안 목록 표시
+- **검색**: 행사명 부분일치 검색
+- **필터**: 행사 유형(8종)별 필터링
+- **재사용**: 과거 입력값을 그대로 가져와 새 초안 작성
+- **삭제**: 초안 개별 삭제 (확인 다이얼로그)
+- **페이지네이션**: 20건씩 페이지 분할
+
+#### 새 파일
+
+- `src/app/api/history/route.ts` (목록·삭제 API)
+- `src/app/api/drafts/[id]/reuse/route.ts` (재사용 데이터 변환 API)
+- `src/app/history/page.tsx` (이력 화면)
+
+#### 수정
+
+- `src/app/speech/page.tsx`: `?reuse=draftId` 쿼리 파라미터 처리, 헤더에 이력 링크 추가
+- `src/components/speech/speech-form.tsx`: `reuseValues` prop 추가, 폼 자동 채움
+- `src/app/page.tsx`: 보조 메뉴 정리 (페르소나 제거, 이력 강조)
+- `src/app/result/[draftId]/page.tsx`: 헤더에 이력 링크 추가
+
+---
+
 ## v0.4.0 (2026-04-27) — AI 본문 생성 (차수 3)
 
 ### ✨ 핵심 기능: AI가 실제 말씀자료 본문을 생성

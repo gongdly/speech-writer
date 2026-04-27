@@ -35,9 +35,10 @@ import {
 interface SpeechFormProps {
   sessionId?: string;
   extractedInfo?: ExtractedEventInfo | null;
+  reuseValues?: Record<string, unknown> | null;
 }
 
-export function SpeechForm({ sessionId, extractedInfo }: SpeechFormProps = {}) {
+export function SpeechForm({ sessionId, extractedInfo, reuseValues }: SpeechFormProps = {}) {
   const router = useRouter();
   const { getAuthPayload, hasAnyKey } = useLLMSettings();
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -83,6 +84,42 @@ export function SpeechForm({ sessionId, extractedInfo }: SpeechFormProps = {}) {
       setAdvancedOpen(true);
     }
   }, [extractedInfo, setValue]);
+
+  // 재사용 데이터가 들어오면 모든 필드 한 번에 채움
+  useEffect(() => {
+    if (!reuseValues) return;
+
+    const fields: Array<keyof SpeechFormValues> = [
+      "eventName",
+      "eventDate",
+      "eventLocation",
+      "eventType",
+      "speakerRole",
+      "speakerOrganization",
+      "audience",
+      "lengthOption",
+      "customChars",
+      "keyMessages",
+      "citedStats",
+      "avoidExpressions",
+      "attendees",
+    ];
+
+    for (const field of fields) {
+      const v = reuseValues[field];
+      if (v !== undefined && v !== null && v !== "") {
+        setValue(field, v as never);
+      }
+    }
+
+    // 고급 옵션이 채워져 있으면 펼치기
+    const hasAdvanced =
+      (reuseValues.keyMessages as string[])?.length > 0 ||
+      reuseValues.citedStats ||
+      (reuseValues.avoidExpressions as string[])?.length > 0 ||
+      (reuseValues.attendees as unknown[])?.length > 0;
+    if (hasAdvanced) setAdvancedOpen(true);
+  }, [reuseValues, setValue]);
 
   const watchSpeakerRole = watch("speakerRole");
   const watchLengthOption = watch("lengthOption");
