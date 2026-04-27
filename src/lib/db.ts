@@ -38,6 +38,7 @@ export interface DraftRow {
   draft_md: string | null;
   draft_meta: string | null;
   status: string;
+  persona_id: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -165,6 +166,34 @@ export async function listDraftsBySession(
     .limit(limit);
 
   if (error) throw new Error(`listDraftsBySession failed: ${error.message}`);
+  return (data as DraftRow[]) ?? [];
+}
+
+/**
+ * 발화자 정보(소속·직책·이름)로 과거 draft 검색 — 페르소나 자동 도출용
+ */
+export async function listDraftsBySpeaker(params: {
+  organization?: string;
+  role?: string;
+  limit?: number;
+}): Promise<DraftRow[]> {
+  const sb = createServerClient();
+  let q = sb
+    .from("drafts")
+    .select("*")
+    .not("draft_md", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(params.limit ?? 20);
+
+  if (params.organization) {
+    q = q.ilike("speaker_organization", `%${params.organization}%`);
+  }
+  if (params.role) {
+    q = q.eq("speaker_role", params.role);
+  }
+
+  const { data, error } = await q;
+  if (error) throw new Error(`listDraftsBySpeaker failed: ${error.message}`);
   return (data as DraftRow[]) ?? [];
 }
 

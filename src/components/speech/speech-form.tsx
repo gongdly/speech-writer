@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Sparkles, Info, ChevronDown, ChevronUp, Plus, X, AlertCircle } from "lucide-react";
@@ -44,6 +45,40 @@ export function SpeechForm({ sessionId, extractedInfo, reuseValues }: SpeechForm
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
+
+  // 페르소나 목록 + 선택
+  const [personas, setPersonas] = useState<
+    Array<{ id: string; name: string; organization: string | null; role: string | null }>
+  >([]);
+  const [selectedPersonaId, setSelectedPersonaId] = useState<string>("");
+
+  // 페르소나 목록 로드
+  useEffect(() => {
+    fetch("/api/personas")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.personas) {
+          setPersonas(
+            data.personas
+              .filter((p: { is_active: boolean }) => p.is_active)
+              .map((p: {
+                id: string;
+                name: string;
+                organization: string | null;
+                role: string | null;
+              }) => ({
+                id: p.id,
+                name: p.name,
+                organization: p.organization,
+                role: p.role,
+              })),
+          );
+        }
+      })
+      .catch(() => {
+        // 페르소나 로드 실패해도 폼은 정상 동작
+      });
+  }, []);
 
   const {
     control,
@@ -187,6 +222,7 @@ export function SpeechForm({ sessionId, extractedInfo, reuseValues }: SpeechForm
           // RAG 임베딩용 Gemini 키 (등록된 경우만, 없으면 서버 키 fallback)
           userGeminiKey: settings.keys.gemini || undefined,
           useRag: true,
+          personaId: selectedPersonaId || undefined,
           formData: {
             eventName: data.eventName,
             eventDate: data.eventDate || undefined,
@@ -326,6 +362,54 @@ export function SpeechForm({ sessionId, extractedInfo, reuseValues }: SpeechForm
                   </p>
                 </div>
               </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 발화자 페르소나 (저장된 페르소나 적용) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-xl">발화자 페르소나 (선택)</CardTitle>
+          <CardDescription>
+            저장된 페르소나를 적용하면 그 발화자 특유의 말투·표현이 본문에 반영됩니다.{" "}
+            <Link href="/personas" className="underline text-primary">
+              페르소나 관리
+            </Link>
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {personas.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              저장된 페르소나가 없습니다.{" "}
+              <Link href="/personas" className="underline text-primary">
+                페르소나 관리 페이지
+              </Link>
+              에서 만들어 보세요. (수동 입력 또는 과거 작성 이력에서 자동 도출 가능)
+            </p>
+          ) : (
+            <div className="space-y-2">
+              <Label htmlFor="persona-select">적용할 페르소나</Label>
+              <select
+                id="persona-select"
+                value={selectedPersonaId}
+                onChange={(e) => setSelectedPersonaId(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="">선택 안 함 (기본)</option>
+                {personas.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                    {p.organization ? ` · ${p.organization}` : ""}
+                    {p.role ? ` · ${p.role}` : ""}
+                  </option>
+                ))}
+              </select>
+              {selectedPersonaId && (
+                <p className="text-xs text-muted-foreground">
+                  본문 작성 시 이 페르소나의 말투·표현·선호 주제가 자동 적용됩니다.
+                </p>
+              )}
             </div>
           )}
         </CardContent>

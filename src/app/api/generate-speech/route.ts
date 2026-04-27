@@ -9,6 +9,10 @@ import { listRagContextsBySession } from "@/lib/rag-cache";
 import { createDraft } from "@/lib/db";
 import { embedText, resolveGeminiKey } from "@/lib/rag/embedding";
 import { searchSimilarChunks, type MatchedChunk } from "@/lib/rag/db";
+import {
+  getPersona,
+  incrementPersonaUsage,
+} from "@/lib/personas/db";
 
 export const runtime = "nodejs";
 export const maxDuration = 60; // Vercel Hobby 한도 (60초)
@@ -119,10 +123,11 @@ export async function POST(req: NextRequest) {
       provider: LLMProvider;
       model: string;
       apiKey: string;
-      formData: Omit<SpeechGenerationInput, "contexts">;
+      formData: Omit<SpeechGenerationInput, "contexts" | "persona">;
       useRag?: boolean;
       ragMatchCount?: number;
       userGeminiKey?: string;
+      personaId?: string; // 발화자 페르소나 ID (선택)
     };
 
     const {
@@ -134,6 +139,7 @@ export async function POST(req: NextRequest) {
       useRag = true,
       ragMatchCount = 5,
       userGeminiKey,
+      personaId,
     } = body;
 
     // 입력 검증
@@ -200,11 +206,35 @@ export async function POST(req: NextRequest) {
         ]
       : contexts;
 
+    // 페르소나 로드 (선택)
+    let persona = null;
+    if (personaId) {
+      try {
+        const fullPersona = await getPersona(personaId);
+        if (fullPersona) {
+          persona = {
+            name: fullPersona.name,
+            organization: fullPersona.organization,
+            role: fullPersona.role,
+            tone: fullPersona.tone,
+            speech_style: fullPersona.speech_style,
+            preferred_phrases: fullPersona.preferred_phrases,
+            avoided_phrases: fullPersona.avoided_phrases,
+            preferred_topics: fullPersona.preferred_topics,
+            custom_instructions: fullPersona.custom_instructions,
+          };
+        }
+      } catch (e) {
+        console.warn("Persona load failed (non-fatal):", e);
+      }
+    }
+
     // 5-Layer 프롬프트 조립
     const { systemPrompt, userPrompt, estimatedInputTokens } =
       buildSpeechPrompt({
         ...formData,
         contexts: enrichedContexts,
+        persona: persona ?? undefined,
       });
 
     // 컨텍스트가 너무 크면 경고
@@ -286,9 +316,16 @@ export async function POST(req: NextRequest) {
         charCount,
         ragUsed: ragSources.length > 0,
         ragSources,
+        personaUsed: persona?.name ?? null,
       }),
       status: "draft",
+      persona_id: personaId ?? null,
     });
+
+    // 페르소나 사용 카운트 증가 (비동기, 실패해도 무시)
+    if (personaId) {
+      incrementPersonaUsage(personaId).catch(() => {});
+    }
 
     return NextResponse.json({
       draftId: draft.id,

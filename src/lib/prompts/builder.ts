@@ -37,6 +37,29 @@ export interface SpeechGenerationInput {
 
   // 컨텍스트 (업로드된 자료)
   contexts?: RagContext[];
+
+  // 발화자 페르소나 (선택)
+  persona?: PersonaForPrompt;
+}
+
+/**
+ * 프롬프트 빌더가 사용하는 페르소나 정보 (DB Persona의 부분집합)
+ */
+export interface PersonaForPrompt {
+  name: string;
+  organization?: string | null;
+  role?: string | null;
+  tone:
+    | "formal"
+    | "friendly"
+    | "data_driven"
+    | "visionary"
+    | "mixed";
+  speech_style: "eumsche" | "gyeoksik" | "mixed";
+  preferred_phrases: string[];
+  avoided_phrases: string[];
+  preferred_topics: string[];
+  custom_instructions?: string | null;
 }
 
 /**
@@ -201,6 +224,85 @@ function buildL5UserInput(input: SpeechGenerationInput): string {
 // 최종 조립
 // ============================================================
 
+const TONE_LABELS: Record<string, string> = {
+  formal: "격식 있고 권위적인 톤",
+  friendly: "친근하고 부드러운 톤",
+  data_driven: "통계·데이터 중심의 객관적 톤",
+  visionary: "비전·미래 지향적이고 영감을 주는 톤",
+  mixed: "상황에 맞춰 균형 잡힌 톤",
+};
+
+const SPEECH_STYLE_LABELS: Record<string, string> = {
+  eumsche: "음슴체 (예: '~함', '~임') — 한국 행정문서 표준",
+  gyeoksik: "격식체 (예: '~합니다', '~입니다') — 청중 대상 발화 표준",
+  mixed: "음슴체와 격식체 혼합",
+};
+
+/**
+ * 페르소나 정보를 사용자 프롬프트의 L4·L5 사이에 삽입할 블록으로 변환
+ */
+function buildPersonaBlock(persona: PersonaForPrompt): string {
+  const parts: string[] = [];
+  parts.push("# 발화자 페르소나");
+  parts.push("");
+  parts.push(
+    "이번 말씀자료는 다음과 같은 발화자 특성을 반영해 작성하십시오. 이 페르소나의 일관성 유지가 매우 중요합니다.",
+  );
+  parts.push("");
+
+  // 기본 정보
+  const basics: string[] = [];
+  basics.push(`- 이름·호칭: ${persona.name}`);
+  if (persona.organization) basics.push(`- 소속: ${persona.organization}`);
+  if (persona.role) basics.push(`- 직책: ${persona.role}`);
+  parts.push(basics.join("\n"));
+  parts.push("");
+
+  // 톤·스타일
+  parts.push("## 말투·톤");
+  parts.push(
+    `- 톤: ${TONE_LABELS[persona.tone] ?? persona.tone}`,
+  );
+  parts.push(
+    `- 어체: ${SPEECH_STYLE_LABELS[persona.speech_style] ?? persona.speech_style}`,
+  );
+  parts.push("");
+
+  // 선호 표현
+  if (persona.preferred_phrases.length > 0) {
+    parts.push("## 자주 쓰는 표현 (자연스럽게 1~3회 활용)");
+    persona.preferred_phrases.forEach((p) => parts.push(`- "${p}"`));
+    parts.push("");
+  }
+
+  // 피하는 표현
+  if (persona.avoided_phrases.length > 0) {
+    parts.push("## 피해야 할 표현 (절대 사용 금지)");
+    persona.avoided_phrases.forEach((p) => parts.push(`- "${p}"`));
+    parts.push("");
+  }
+
+  // 선호 주제
+  if (persona.preferred_topics.length > 0) {
+    parts.push("## 즐겨 다루는 주제·관점 (가능하면 본문에 녹여 넣기)");
+    persona.preferred_topics.forEach((t) => parts.push(`- ${t}`));
+    parts.push("");
+  }
+
+  // 자유 입력 추가 지시
+  if (persona.custom_instructions?.trim()) {
+    parts.push("## 추가 작성 지침");
+    parts.push(persona.custom_instructions.trim());
+    parts.push("");
+  }
+
+  parts.push(
+    "위 페르소나는 시스템 프롬프트의 일반 지침보다 우선합니다. 다만 한국 행정문서의 기본 격식·5대 원칙(L1~L3)은 절대 위반하지 마십시오.",
+  );
+
+  return parts.join("\n");
+}
+
 export interface BuiltPrompt {
   systemPrompt: string;
   userPrompt: string;
@@ -211,7 +313,7 @@ export interface BuiltPrompt {
  * 5-Layer 프롬프트를 조립하여 최종 시스템·사용자 프롬프트 생성
  *
  * - System: L1 + L2 + L3 (정적, 동일)
- * - User: L4 + L5 (동적, 사용자별 다름)
+ * - User: L4(컨텍스트) + 페르소나(있을 시) + L5(사용자 입력) + 작성 시작
  */
 export function buildSpeechPrompt(input: SpeechGenerationInput): BuiltPrompt {
   const systemPrompt = [
@@ -221,9 +323,12 @@ export function buildSpeechPrompt(input: SpeechGenerationInput): BuiltPrompt {
   ].join("\n\n---\n\n");
 
   const l4 = buildL4Context(input);
+  const personaBlock = input.persona ? buildPersonaBlock(input.persona) : "";
   const l5 = buildL5UserInput(input);
 
-  const userPrompt = `${l4}\n\n---\n\n${l5}\n\n---\n\n# 작성 시작
+  const middleSections = [l4, personaBlock, l5].filter(Boolean);
+
+  const userPrompt = `${middleSections.join("\n\n---\n\n")}\n\n---\n\n# 작성 시작
 
 위 모든 정보를 바탕으로 ${EVENT_TYPE_LABELS[input.eventType] ?? "말씀자료"}를 작성하십시오. 시스템 프롬프트의 5대 원칙·작성 절차·출력 형식을 모두 준수하여 최종본을 출력하십시오.`;
 

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FileText, Newspaper, ArrowRight, Sparkles, KeyRound, History, Database } from "lucide-react";
+import { FileText, Newspaper, ArrowRight, Sparkles, KeyRound, History, Database, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -122,6 +122,12 @@ export default function HomePage() {
             </Link>
           </Button>
           <Button variant="outline" asChild>
+            <Link href="/personas">
+              <Users className="w-4 h-4 mr-2" />
+              페르소나 관리
+            </Link>
+          </Button>
+          <Button variant="outline" asChild>
             <Link href="/rag">
               <Database className="w-4 h-4 mr-2" />
               RAG 관리
@@ -133,7 +139,7 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="border-t py-6 text-center text-sm text-muted-foreground">
         <div className="container max-w-5xl">
-          <p>Speech Writer · AI 기반 공공 콘텐츠 작성 도구 · v0.8</p>
+          <p>Speech Writer · AI 기반 공공 콘텐츠 작성 도구 · v0.9</p>
         </div>
       </footer>
     </main>
