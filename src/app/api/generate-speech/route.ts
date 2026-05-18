@@ -100,7 +100,7 @@ function formatRagContext(matches: MatchedChunk[]): string {
  *     model: string,
  *     apiKey: string,
  *     formData: SpeechGenerationInput,
- *     useRag?: boolean,                  // 기본 true
+ *     useRag?: boolean,                  // 기본 false (보도자료 도구에서 별도 사용 권장)
  *     ragMatchCount?: number,            // 기본 5
  *     userGeminiKey?: string,            // RAG 임베딩용 (없으면 서버 키 fallback)
  *   }
@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
       model,
       apiKey,
       formData,
-      useRag = true,
+      useRag = false,
       ragMatchCount = 5,
       userGeminiKey,
       personaId,
