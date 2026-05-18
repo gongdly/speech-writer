@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FileText, Newspaper, ArrowRight, Sparkles, KeyRound, History, Database, Users } from "lucide-react";
+import { FileText, Newspaper, ArrowRight, ExternalLink, Sparkles, KeyRound, History, Database, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -15,11 +15,11 @@ export default function HomePage() {
           </div>
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
             5분 안에 완성하는<br />
-            격식 있는 말씀자료
+            격식 있는 행정문서
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            행사 정보를 입력하면 부처·기관 표준 6단 구조로 초안을 자동 생성합니다.
-            장관부터 기관장까지, 모든 직급의 페르소나를 지원합니다.
+            행사 정보·참조 자료를 입력하면 부처·기관 표준 구조로 초안을 자동 생성합니다.
+            말씀자료부터 보도자료까지 한 곳에서 작성하세요.
           </p>
         </div>
       </section>
@@ -71,37 +71,46 @@ export default function HomePage() {
             </CardContent>
           </Card>
 
-          {/* 보도자료 모듈 (Phase 2, 비활성) */}
-          <Card className="relative overflow-hidden opacity-60 cursor-not-allowed">
+          {/* 보도자료 모듈 (별도 운영, 외부 링크) */}
+          <Card className="relative overflow-hidden hover:shadow-lg transition-shadow">
             <div className="absolute top-4 right-4">
-              <span className="text-xs font-medium px-2 py-1 rounded-full bg-gray-100 text-gray-600">
-                Phase 2 예정
+              <span className="text-xs font-medium px-2 py-1 rounded-full bg-green-100 text-green-800">
+                사용 가능
               </span>
             </div>
             <CardHeader>
-              <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center mb-3">
-                <Newspaper className="w-6 h-6 text-muted-foreground" />
+              <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-3">
+                <Newspaper className="w-6 h-6 text-primary" />
               </div>
               <CardTitle>보도자료</CardTitle>
-              <CardDescription>정책 발표·사업 안내 보도자료 작성</CardDescription>
+              <CardDescription>
+                정책브리핑 + 부처 보도자료 참조 기반 자동 생성
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li className="flex items-start gap-2">
-                  <span className="mt-0.5">·</span>
+                  <span className="text-primary mt-0.5">✓</span>
+                  <span>정책브리핑 API 연동 — 부처별 최신 자료 검색·참조</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-primary mt-0.5">✓</span>
                   <span>표제·부제·리드문·본문 자동 구조화</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="mt-0.5">·</span>
-                  <span>장관·차관 인용구 자동 생성</span>
+                  <span className="text-primary mt-0.5">✓</span>
+                  <span>참고 문서 첨부 → 본문 맥락 강화</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="mt-0.5">·</span>
-                  <span>참고 통계·인용 자료 자동 활용</span>
+                  <span className="text-primary mt-0.5">✓</span>
+                  <span>정부 표준 HWPX 자동 다운로드</span>
                 </li>
               </ul>
-              <Button disabled className="w-full" size="lg" variant="outline">
-                Phase 2에서 출시 예정
+              <Button asChild className="w-full" size="lg">
+                <a href="https://press-docs-mcp.onrender.com" target="_blank" rel="noopener noreferrer">
+                  보도자료 작성하기
+                  <ExternalLink className="ml-2 w-4 h-4" />
+                </a>
               </Button>
             </CardContent>
           </Card>
