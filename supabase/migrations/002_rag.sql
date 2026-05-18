@@ -145,6 +145,15 @@ $$;
 -- =============================================================================
 -- 9. 초기 RSS 소스 데이터
 -- =============================================================================
+-- 검증 완료된 RSS URL만 등록 (2026-05 빅보스님 직접 검증)
+-- 정책브리핑: 한국 IP에서 정상 동작 확인
+-- 행정안전부 3종: mois.go.kr RSS 안내 페이지에서 공식 URL 확인
+--   (https://www.mois.go.kr/frt/sub/a08/rss/screen.do)
+--
+-- 제거됨 (URL이 존재하지 않거나 응답 없음):
+--   - 행안부 옛 URL: /rss/cmm/news/news_001.do
+--   - 고용노동부, 보건복지부, 교육부, 국토교통부 (각 부처 RSS 안내 페이지 미검증)
+-- =============================================================================
 INSERT INTO public.rss_sources (id, name, category, ministry, rss_url, created_at, updated_at)
 VALUES
   ('policy_briefing_main', '정책브리핑 - 정책뉴스', 'policy_briefing', NULL,
@@ -153,27 +162,17 @@ VALUES
    EXTRACT(EPOCH FROM NOW())::bigint * 1000),
 
   ('mois_press', '행정안전부 보도자료', 'ministry_press', '행정안전부',
-   'https://www.mois.go.kr/rss/cmm/news/news_001.do',
+   'https://www.mois.go.kr/gpms/view/jsp/rss/rss.jsp?ctxCd=1012',
    EXTRACT(EPOCH FROM NOW())::bigint * 1000,
    EXTRACT(EPOCH FROM NOW())::bigint * 1000),
 
-  ('moel_press', '고용노동부 보도자료', 'ministry_press', '고용노동부',
-   'https://www.moel.go.kr/rss/news_press.xml',
+  ('mois_explain', '행정안전부 설명자료', 'ministry_press', '행정안전부',
+   'https://www.mois.go.kr/gpms/view/jsp/rss/rss.jsp?ctxCd=1013',
    EXTRACT(EPOCH FROM NOW())::bigint * 1000,
    EXTRACT(EPOCH FROM NOW())::bigint * 1000),
 
-  ('mohw_press', '보건복지부 보도자료', 'ministry_press', '보건복지부',
-   'http://www.mohw.go.kr/rss/news_press.xml',
-   EXTRACT(EPOCH FROM NOW())::bigint * 1000,
-   EXTRACT(EPOCH FROM NOW())::bigint * 1000),
-
-  ('moe_press', '교육부 보도자료', 'ministry_press', '교육부',
-   'https://www.moe.go.kr/boardCnts/rssList.do?boardID=294',
-   EXTRACT(EPOCH FROM NOW())::bigint * 1000,
-   EXTRACT(EPOCH FROM NOW())::bigint * 1000),
-
-  ('molit_press', '국토교통부 보도자료', 'ministry_press', '국토교통부',
-   'http://www.molit.go.kr/rss/news_press.xml',
+  ('mois_notice', '행정안전부 알립니다', 'ministry_press', '행정안전부',
+   'https://www.mois.go.kr/gpms/view/jsp/rss/rss.jsp?ctxCd=1001',
    EXTRACT(EPOCH FROM NOW())::bigint * 1000,
    EXTRACT(EPOCH FROM NOW())::bigint * 1000)
 ON CONFLICT (id) DO NOTHING;
@@ -191,5 +190,5 @@ GRANT EXECUTE ON FUNCTION public.match_rag_chunks TO service_role;
 -- =============================================================================
 -- 검증: 다음 쿼리로 정상 작동 확인 가능
 --   SELECT id, name FROM public.rss_sources;
---   → 6개 행이 나오면 성공
+--   → 4개 행이 나오면 성공 (정책브리핑 1 + 행안부 3)
 -- =============================================================================
