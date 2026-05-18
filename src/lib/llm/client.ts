@@ -107,6 +107,13 @@ async function callGemini(req: LLMRequest): Promise<LLMResponse> {
     generationConfig: {
       maxOutputTokens: req.maxTokens ?? 1024,
       ...(req.temperature !== undefined && { temperature: req.temperature }),
+      // Gemini 2.5 Flash/Pro는 기본적으로 thinking이 활성화되어 있어
+      // thinking 토큰이 maxOutputTokens를 잠식해 빈 응답을 반환하는 경우가 있다.
+      // 구조화 추출 작업에서는 thinking이 불필요하므로 비활성화한다.
+      // 참고: https://ai.google.dev/gemini-api/docs/thinking
+      ...(req.model.startsWith("gemini-2.5") && {
+        thinkingConfig: { thinkingBudget: 0 },
+      }),
     },
   };
 
