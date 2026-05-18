@@ -173,22 +173,51 @@ function parseDate(dateStr: string): number | null {
  *
  * 한국 정부 사이트는 종종 UTF-8이 아닌 EUC-KR을 쓰므로 Content-Type 확인 필요.
  * 일단 UTF-8 가정하고, 실패 시 별도 처리.
+ *
+ * ⚠️ User-Agent 주의:
+ *   한국 정부 사이트는 UA 문자열에 "bot", "crawler", "spider" 등 키워드가 있으면
+ *   즉시 차단(403 또는 연결 거부)합니다. Node.js 기본 UA(undici/...)도 봇으로 분류됨.
+ *   → 반드시 일반 브라우저 UA 사용.
  */
 export async function fetchAndParseRss(rssUrl: string): Promise<ParsedArticle[]> {
-  const res = await fetch(rssUrl, {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (compatible; speech-writer-bot/1.0; +https://speech-writer-delta.vercel.app)",
-      Accept: "application/rss+xml, application/xml, text/xml, */*",
-    },
-    // Vercel Function 안에서 redirect 따라가기 허용
-    redirect: "follow",
-  });
+  // 타임아웃 (10초) — 정부 사이트가 느리거나 응답 없을 때 무한 대기 방지
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+  let res: Response;
+  try {
+    res = await fetch(rssUrl, {
+      headers: {
+        // 일반 브라우저 UA로 위장 (Chrome 최신 안정 버전)
+        // "bot" 키워드가 들어가면 한국 정부 사이트에서 차단됨
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        Accept:
+          "application/rss+xml, application/xml;q=0.9, text/xml;q=0.9, */*;q=0.8",
+        "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+        "Cache-Control": "no-cache",
+      },
+      redirect: "follow",
+      signal: controller.signal,
+    });
+  } catch (e) {
+    // 네트워크 레벨 실패 (DNS, timeout, 연결 거부 등) → "fetch failed"로 잡힘
+    clearTimeout(timeoutId);
+    const reason = e instanceof Error ? e.message : String(e);
+    if (reason.includes("aborted")) {
+      throw new Error(`RSS 응답 시간 초과 (10s): ${rssUrl}`);
+    }
+    throw new Error(`RSS 연결 실패: ${reason} — ${rssUrl}`);
+  }
+  clearTimeout(timeoutId);
 
   if (!res.ok) {
-    throw new Error(`RSS fetch 실패 (${res.status}): ${rssUrl}`);
+    throw new Error(`RSS fetch 실패 (HTTP ${res.status}): ${rssUrl}`);
   }
 
   const text = await res.text();
+  if (!text || text.length < 50) {
+    throw new Error(`RSS 응답이 비어있거나 너무 짧음 (${text.length}자): ${rssUrl}`);
+  }
   return parseRss(text);
 }
