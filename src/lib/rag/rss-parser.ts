@@ -178,11 +178,16 @@ function parseDate(dateStr: string): number | null {
  *   한국 정부 사이트는 UA 문자열에 "bot", "crawler", "spider" 등 키워드가 있으면
  *   즉시 차단(403 또는 연결 거부)합니다. Node.js 기본 UA(undici/...)도 봇으로 분류됨.
  *   → 반드시 일반 브라우저 UA 사용.
+ *
+ * ⚠️ 타임아웃:
+ *   한국 정부 사이트는 해외 IP(예: Vercel iad1)에서 응답을 매우 느리게 보냅니다.
+ *   완전 차단은 아닌 듯하나 throttle이 걸린 것으로 추정. 30초까지 대기.
  */
 export async function fetchAndParseRss(rssUrl: string): Promise<ParsedArticle[]> {
-  // 타임아웃 (10초) — 정부 사이트가 느리거나 응답 없을 때 무한 대기 방지
+  // 타임아웃 (30초) — 해외 IP에서 한국 정부 사이트가 응답 지연을 보일 때 대응
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  const startTime = Date.now();
 
   let res: Response;
   try {
@@ -203,11 +208,13 @@ export async function fetchAndParseRss(rssUrl: string): Promise<ParsedArticle[]>
   } catch (e) {
     // 네트워크 레벨 실패 (DNS, timeout, 연결 거부 등) → "fetch failed"로 잡힘
     clearTimeout(timeoutId);
+    const elapsed = Date.now() - startTime;
     const reason = e instanceof Error ? e.message : String(e);
+    const errCode = e instanceof Error && "cause" in e ? String((e as { cause: unknown }).cause) : "";
     if (reason.includes("aborted")) {
-      throw new Error(`RSS 응답 시간 초과 (10s): ${rssUrl}`);
+      throw new Error(`RSS 응답 시간 초과 (${Math.round(elapsed / 1000)}s): ${rssUrl}`);
     }
-    throw new Error(`RSS 연결 실패: ${reason} — ${rssUrl}`);
+    throw new Error(`RSS 연결 실패 (${Math.round(elapsed / 1000)}s, ${errCode || reason}): ${rssUrl}`);
   }
   clearTimeout(timeoutId);
 
