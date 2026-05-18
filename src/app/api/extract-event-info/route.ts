@@ -71,16 +71,48 @@ ${truncatedText}`;
         maxTokens: 1024,
       });
 
-      const jsonMatch = response.text.match(/\{[\s\S]*\}/);
+      // 빈 응답 처리 (Gemini 2.5 thinking 토큰 소진 등)
+      if (!response.text || response.text.trim().length === 0) {
+        return NextResponse.json(
+          {
+            error:
+              "AI가 빈 응답을 반환했습니다. 다른 모델로 변경하거나 잠시 후 다시 시도해 주세요.",
+          },
+          { status: 502 },
+        );
+      }
+
+      // 마크다운 코드블럭 제거 (```json ... ``` 또는 ``` ... ```)
+      const cleaned = response.text
+        .replace(/^```(?:json)?\s*/i, "")
+        .replace(/\s*```\s*$/i, "")
+        .trim();
+
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
         return NextResponse.json(
-          { error: "AI 응답을 파싱할 수 없습니다", raw: response.text },
+          {
+            error: "AI 응답에서 JSON을 찾을 수 없습니다. 다시 시도해 주세요.",
+            raw: response.text.slice(0, 200),
+          },
           { status: 500 },
         );
       }
 
-      const extracted = JSON.parse(jsonMatch[0]);
-      return NextResponse.json(extracted);
+      try {
+        const extracted = JSON.parse(jsonMatch[0]);
+        return NextResponse.json(extracted);
+      } catch (parseErr) {
+        return NextResponse.json(
+          {
+            error:
+              "AI 응답의 JSON 형식이 잘못되었습니다. 다시 시도해 주세요.",
+            raw: jsonMatch[0].slice(0, 200),
+            parseError: parseErr instanceof Error ? parseErr.message : "unknown",
+          },
+          { status: 500 },
+        );
+      }
     } catch (e) {
       if (e instanceof LLMError) {
         return NextResponse.json(
